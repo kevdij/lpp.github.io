@@ -25,24 +25,23 @@ button{padding:10px 16px;font-size:16px;margin:5px;}
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 const tg = window.Telegram.WebApp;
-console.log("InitDataUnsafe:", Telegram.WebApp.initDataUnsafe);
 if(tg.expand) tg.expand();
 
-const canvas=document.getElementById('pad');
-const ctx=canvas.getContext('2d');
-let drawing=false;
-let strokes=[]; 
-let currentStroke=[];
+const canvas = document.getElementById('pad');
+const ctx = canvas.getContext('2d');
+let drawing = false;
+let strokes = [];
+let currentStroke = [];
 
 canvas.addEventListener('pointerdown', e=>{
   e.preventDefault();
-  drawing=true;
+  drawing = true;
   currentStroke.push({x:e.offsetX, y:e.offsetY});
 });
 canvas.addEventListener('pointermove', e=>{
   if(drawing){
     e.preventDefault();
-    const last=currentStroke[currentStroke.length-1];
+    const last = currentStroke[currentStroke.length-1];
     ctx.beginPath();
     ctx.moveTo(last.x,last.y);
     ctx.lineTo(e.offsetX,e.offsetY);
@@ -69,12 +68,24 @@ document.getElementById('clear').addEventListener('click', ()=>{
 });
 
 document.getElementById('send').addEventListener('click', ()=>{
-  const status=document.getElementById('status');
-  if(strokes.length===0){ status.textContent="❌ Aucun tracé"; return; }
-  const payload={telegram_id:Telegram.WebApp.initDataUnsafe?.user?.id||null, points:strokes};
+  const status = document.getElementById('status');
+  const userId = Telegram.WebApp.initDataUnsafe?.user?.id;
+
+  if(!userId){
+    status.textContent = "❌ Ouvrez la WebApp depuis le bouton du chat privé";
+    console.error("User ID non trouvé, sendData() impossible !");
+    return;
+  }
+
+  if(strokes.length===0){
+    status.textContent="❌ Aucun tracé";
+    return;
+  }
+
+  const payload = { telegram_id: userId, points: strokes };
   console.log("Envoi payload:", payload);
   Telegram.WebApp.sendData(JSON.stringify(payload));
-  status.textContent="✅ Signature envoyée !";
+  status.textContent = "✅ Signature envoyée !";
 });
 </script>
 </body>
