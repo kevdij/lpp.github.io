@@ -1,99 +1,163 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Signature</title>
-<meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
-  body { font-family: Arial, sans-serif; text-align:center; padding:10px; }
-  #pad { border:1px solid #333; width:100%; height:300px; touch-action:none; }
-  button{ margin:8px; padding:10px 16px; font-size:16px; }
-  body, html {
-    overscroll-behavior: none;
-    touch-action: none;
+  html, body {
+    height: 100%;
     margin: 0;
     padding: 0;
+    overscroll-behavior: none; /* empêche le rebond/scroll */
+    touch-action: none;        /* empêche les gestes de défilement */
+    -webkit-user-select: none;
+    user-select: none;
+    background: #fff;
+    font-family: Arial, sans-serif;
   }
+  .container {
+    padding: 10px;
+    box-sizing: border-box;
+  }
+  #pad {
+    display: block;
+    width: 100%;
+    height: 320px;
+    border: 2px solid #333;
+    border-radius: 6px;
+    touch-action: none; /* IMPORTANT */
+    background: #fff;
+  }
+  .controls { margin-top: 10px; text-align:center; }
+  button { padding: 10px 16px; font-size:16px; margin:6px; }
 </style>
 </head>
 <body>
-<h3>Signer ici</h3>
-<canvas id="pad"></canvas>
-<br/>
-<button id="clear">Effacer</button>
-<button id="send">Envoyer</button>
+<div class="container">
+  <h3>Signer ici</h3>
+  <canvas id="pad"></canvas>
+  <div class="controls">
+    <button id="clear">Effacer</button>
+    <button id="send">Envoyer</button>
+  </div>
+  <div id="status" style="margin-top:8px;color:#666;font-size:14px;text-align:center;"></div>
+</div>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 const tg = window.Telegram?.WebApp;
-if (tg) {
-  tg.expand(); // ouvre en grand si possible
-}
+if (tg && tg.expand) tg.expand();
 
+const statusEl = document.getElementById('status');
 const canvas = document.getElementById('pad');
+const ctx = canvas.getContext('2d');
+
 function resizeCanvas(){
   const ratio = window.devicePixelRatio || 1;
-  canvas.width = canvas.clientWidth * ratio;
-  canvas.height = canvas.clientHeight * ratio;
-  const ctx = canvas.getContext('2d');
+  // taille CSS
+  const cssWidth = canvas.clientWidth || document.documentElement.clientWidth - 20;
+  const cssHeight = 320; // fixe pour éviter resize involontaire
+  canvas.style.height = cssHeight + 'px';
+  canvas.width = Math.round(cssWidth * ratio);
+  canvas.height = Math.round(cssHeight * ratio);
   ctx.scale(ratio, ratio);
   ctx.lineWidth = 2;
   ctx.lineCap = 'round';
+  ctx.strokeStyle = '#000';
 }
-resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
-const ctx = canvas.getContext('2d');
 let drawing = false;
 
-canvas.addEventListener('pointerdown', (e)=>{
+function getPos(e){
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX !== undefined) ? e.clientX - rect.left : (e.touches && e.touches[0]) ? e.touches[0].clientX - rect.left : 0;
+  const y = (e.clientY !== undefined) ? e.clientY - rect.top : (e.touches && e.touches[0]) ? e.touches[0].clientY - rect.top : 0;
+  return { x, y };
+}
+
+// Pointer events with preventDefault and setPointerCapture
+canvas.addEventListener('pointerdown', function(e){
+  e.preventDefault();
   drawing = true;
-  const rect = canvas.getBoundingClientRect();
+  canvas.setPointerCapture(e.pointerId);
+  const p = getPos(e);
   ctx.beginPath();
-  ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+  ctx.moveTo(p.x, p.y);
 });
-canvas.addEventListener('pointermove', (e)=>{
+canvas.addEventListener('pointermove', function(e){
   if(!drawing) return;
-  const rect = canvas.getBoundingClientRect();
-  ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+  e.preventDefault();
+  const p = getPos(e);
+  ctx.lineTo(p.x, p.y);
   ctx.stroke();
+}, { passive: false });
+canvas.addEventListener('pointerup', function(e){
+  e.preventDefault();
+  drawing = false;
+  try { canvas.releasePointerCapture(e.pointerId); } catch(err){}
 });
-canvas.addEventListener('pointerup', ()=> drawing = false);
-canvas.addEventListener('pointercancel', ()=> drawing = false);
+canvas.addEventListener('pointercancel', function(){ drawing = false; });
 
-document.getElementById('clear').addEventListener('click', ()=>{
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+document.getElementById('clear').addEventListener('click', function(){
+  // clear taking into account devicePixelRatio scaling
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  statusEl.textContent = '';
 });
 
-document.getElementById('send').addEventListener('click', ()=>{
-  // Récupérer l'ID Telegram de l'utilisateur via Telegram WebApp
-  let tgUser = {};
+function resizeImageToMax(imgDataUrl, maxWidth){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.onload = function(){
+      const ratio = img.width / img.height;
+      const w = Math.min(maxWidth, img.width);
+      const h = Math.round(w / ratio);
+      const tmp = document.createElement('canvas');
+      tmp.width = w;
+      tmp.height = h;
+      const tctx = tmp.getContext('2d');
+      tctx.drawImage(img, 0, 0, w, h);
+      resolve(tmp.toDataURL('image/png'));
+    };
+    img.onerror = function(){ resolve(imgDataUrl); };
+    img.src = imgDataUrl;
+  });
+}
+
+document.getElementById('send').addEventListener('click', async function(){
   try {
-    // initDataUnsafe donne user si présent (attention : pas cryptographique)
-    const unsafe = Telegram.WebApp.initDataUnsafe?.();
-    if (unsafe && unsafe.user) tgUser = unsafe.user;
-  } catch(e){ console.warn(e); }
+    // small visual feedback
+    statusEl.textContent = 'Préparation de la signature…';
 
-  const imgData = canvas.toDataURL('image/png');
+    // get data URL from canvas (full resolution)
+    let dataUrl = canvas.toDataURL('image/png');
 
-  // Envoi de la donnée au bot : ici on envoie un JSON encodé en string
-  //const payload = {
-  //  telegram_id: tgUser.id || null,
-  //  user: tgUser,
-  //  image: imgData
-  //};
+    // resize to max width to keep payload reasonable (e.g. 800px)
+    dataUrl = await resizeImageToMax(dataUrl, 800);
 
-  // sendData envoie la string au bot (le bot recevra web_app_data)
-  //Telegram.WebApp.sendData(JSON.stringify(payload));
-  const payload = {
-    telegram_id: window.Telegram.WebApp.initDataUnsafe?.user?.id || null,
-    image: canvas.toDataURL("image/png")
-};
+    // try get user id from initDataUnsafe (best effort)
+    let tgUser = null;
+    try {
+      const unsafe = Telegram.WebApp.initDataUnsafe?.();
+      if (unsafe && unsafe.user) tgUser = unsafe.user;
+    } catch(e){ tgUser = null; }
 
-Telegram.WebApp.sendData(JSON.stringify(payload));
+    const payload = {
+      telegram_id: tgUser?.id || null,
+      user: tgUser || null,
+      image: dataUrl
+    };
 
-  // optionnel : fermer la webapp
-  Telegram.WebApp.close();
+    // send data to bot
+    Telegram.WebApp.sendData(JSON.stringify(payload));
+    statusEl.textContent = 'Signature envoyée. Merci.';
+    // close optionally
+    Telegram.WebApp.close();
+  } catch(err){
+    statusEl.textContent = 'Erreur envoi : ' + (err && err.message ? err.message : err);
+  }
 });
 </script>
 </body>
