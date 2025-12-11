@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Signature</title>
+<style>
+html, body { height:100%; margin:0; padding:0; overscroll-behavior:none; touch-action:none; }
+canvas { border:2px solid #333; border-radius:6px; display:block; margin:0 auto; touch-action:none; }
+.controls { text-align:center; margin-top:10px; }
+button { padding:10px 16px; font-size:16px; margin:5px; }
+</style>
+</head>
+<body>
+<h3 style="text-align:center;">Signer ici</h3>
+<canvas id="pad" width="800" height="320"></canvas>
+<div class="controls">
+    <button id="clear">Effacer</button>
+    <button id="send">Envoyer</button>
+</div>
+<div id="status" style="text-align:center;color:#666;margin-top:8px;"></div>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+const tg = window.Telegram.WebApp;
+if (tg.expand) tg.expand();
+
+const canvas = document.getElementById('pad');
+const ctx = canvas.getContext('2d');
+let drawing = false;
+
+canvas.addEventListener('pointerdown', e=>{ e.preventDefault(); drawing=true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); });
+canvas.addEventListener('pointermove', e=>{ if(drawing){ e.preventDefault(); ctx.lineTo(e.offsetX,e.offsetY); ctx.stroke(); } });
+canvas.addEventListener('pointerup', e=>{ drawing=false; });
+canvas.addEventListener('pointercancel', e=>{ drawing=false; });
+
+document.getElementById('clear').addEventListener('click', ()=>{ ctx.clearRect(0,0,canvas.width,canvas.height); document.getElementById('status').textContent=''; });
+
+function resizeImage(dataUrl, maxWidth=800){
+    return new Promise(resolve=>{
+        const img=new Image();
+        img.onload=()=>{ const ratio=img.width/img.height; const w=Math.min(maxWidth,img.width); const h=Math.round(w/ratio); const tmp=document.createElement('canvas'); tmp.width=w; tmp.height=h; tmp.getContext('2d').drawImage(img,0,0,w,h); resolve(tmp.toDataURL('image/png')); };
+        img.onerror=()=>resolve(dataUrl);
+        img.src=dataUrl;
+    });
+}
+
+document.getElementById('send').addEventListener('click', async ()=>{
+    const status = document.getElementById('status');
+    status.textContent='Préparation...';
+    let dataUrl = canvas.toDataURL('image/png');
+    dataUrl = await resizeImage(dataUrl,800);
+    let tgUser=null;
+    try{ tgUser=Telegram.WebApp.initDataUnsafe.user; }catch(e){ tgUser=null; }
+    const payload = { telegram_id: tgUser?.id || null, image: dataUrl };
+    Telegram.WebApp.sendData(JSON.stringify(payload));
+    status.textContent='Signature envoyée. Merci.';
+});
+</script>
+</body>
+</html>
