@@ -77,14 +77,20 @@ document.getElementById('send').addEventListener('click', ()=>{
   const imgData = canvas.toDataURL('image/png');
 
   // Envoi de la donnée au bot : ici on envoie un JSON encodé en string
-  const payload = {
-    telegram_id: tgUser.id || null,
-    user: tgUser,
-    image: imgData
-  };
+  //const payload = {
+  //  telegram_id: tgUser.id || null,
+  //  user: tgUser,
+  //  image: imgData
+  //};
 
   // sendData envoie la string au bot (le bot recevra web_app_data)
-  Telegram.WebApp.sendData(JSON.stringify(payload));
+  //Telegram.WebApp.sendData(JSON.stringify(payload));
+  const payload = {
+    telegram_id: window.Telegram.WebApp.initDataUnsafe?.user?.id || null,
+    image: canvas.toDataURL("image/png")
+};
+
+Telegram.WebApp.sendData(JSON.stringify(payload));
 
   // optionnel : fermer la webapp
   Telegram.WebApp.close();
