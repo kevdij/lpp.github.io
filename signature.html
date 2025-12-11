@@ -30,7 +30,7 @@ if(tg.expand) tg.expand();
 const canvas=document.getElementById('pad');
 const ctx=canvas.getContext('2d');
 let drawing=false;
-let strokes=[]; // tableau de tracés
+let strokes=[]; 
 let currentStroke=[];
 
 canvas.addEventListener('pointerdown', e=>{
@@ -71,6 +71,7 @@ document.getElementById('send').addEventListener('click', ()=>{
   const status=document.getElementById('status');
   if(strokes.length===0){ status.textContent="❌ Aucun tracé"; return; }
   const payload={telegram_id:Telegram.WebApp.initDataUnsafe?.user?.id||null, points:strokes};
+  console.log("Envoi payload:", payload);
   Telegram.WebApp.sendData(JSON.stringify(payload));
   status.textContent="✅ Signature envoyée !";
 });
