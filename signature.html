@@ -5,29 +5,25 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Signature</title>
 <style>
-html,body{margin:0;padding:0;height:100%;touch-action:none;overscroll-behavior:none;}
-body{display:flex;flex-direction:column;align-items:center;font-family:sans-serif;}
-canvas{border:2px solid #333;border-radius:6px;margin-top:10px;}
-.controls{margin-top:10px;}
-button{padding:10px 16px;font-size:16px;margin:5px;}
-#status{margin-top:10px;color:#333;text-align:center;}
-#debug{color:red; max-height:200px; overflow:auto; white-space:pre-wrap; margin-top:10px; border:1px solid #ccc; padding:5px; width:90%;}
+body{display:flex;flex-direction:column;align-items:center;margin:0;padding:0;font-family:sans-serif;}
+canvas{border:2px solid #333;margin-top:10px;}
+button{padding:10px 16px;margin:5px;}
+#status{margin-top:10px;color:#333;}
 </style>
 </head>
 <body>
 <h3>Signer ici</h3>
 <canvas id="pad" width="400" height="160"></canvas>
-<div class="controls">
+<div>
 <button id="clear">Effacer</button>
 <button id="send">Envoyer</button>
 </div>
 <div id="status"></div>
-<pre id="debug"></pre>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 const tg = window.Telegram.WebApp;
-if(tg.expand) tg.expand();
+tg.expand();
 
 const canvas = document.getElementById('pad');
 const ctx = canvas.getContext('2d');
@@ -35,80 +31,25 @@ let drawing = false;
 let strokes = [];
 let currentStroke = [];
 
-const statusEl = document.getElementById('status');
-const debugEl = document.getElementById('debug');
-function debug(msg){
-    console.log(msg);
-    debugEl.textContent += msg + "\n";
-}
+canvas.addEventListener('pointerdown', e => { drawing=true; currentStroke.push({x:e.offsetX, y:e.offsetY}); });
+canvas.addEventListener('pointermove', e => { if(drawing){ const last=currentStroke[currentStroke.length-1]; ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(e.offsetX,e.offsetY); ctx.stroke(); currentStroke.push({x:e.offsetX,y:e.offsetY}); } });
+canvas.addEventListener('pointerup', e => { drawing=false; if(currentStroke.length>0) strokes.push(currentStroke); currentStroke=[]; });
+canvas.addEventListener('pointercancel', e => { drawing=false; if(currentStroke.length>0) strokes.push(currentStroke); currentStroke=[]; });
 
-// ----- Canvas events -----
-canvas.addEventListener('pointerdown', e=>{
-  e.preventDefault();
-  drawing = true;
-  currentStroke.push({x:e.offsetX, y:e.offsetY});
-});
-canvas.addEventListener('pointermove', e=>{
-  if(drawing){
-    e.preventDefault();
-    const last = currentStroke[currentStroke.length-1];
-    ctx.beginPath();
-    ctx.moveTo(last.x,last.y);
-    ctx.lineTo(e.offsetX,e.offsetY);
-    ctx.stroke();
-    currentStroke.push({x:e.offsetX,y:e.offsetY});
-  }
-});
-canvas.addEventListener('pointerup', e=>{
-  drawing=false;
-  if(currentStroke.length>0) strokes.push(currentStroke);
-  currentStroke=[];
-});
-canvas.addEventListener('pointercancel', e=>{
-  drawing=false;
-  if(currentStroke.length>0) strokes.push(currentStroke);
-  currentStroke=[];
-});
-
-// ----- Buttons -----
 document.getElementById('clear').addEventListener('click', ()=>{
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  strokes=[];
-  currentStroke=[];
-  statusEl.textContent='';
-  debugEl.textContent='';
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    strokes=[];
+    currentStroke=[];
+    document.getElementById('status').textContent='';
 });
 
 document.getElementById('send').addEventListener('click', ()=>{
-  statusEl.textContent='';
-  debugEl.textContent='';
-
-  const userId = Telegram.WebApp.initDataUnsafe?.user?.id;
-  debug("User ID: " + userId);
-
-  if(!userId){
-    statusEl.textContent = "❌ Ouvrez la WebApp depuis le bouton du chat privé";
-    debug("Impossible d'obtenir l'ID Telegram, sendData() annulé");
-    return;
-  }
-
-  if(strokes.length===0){
-    statusEl.textContent="❌ Aucun tracé";
-    debug("Aucun tracé à envoyer");
-    return;
-  }
-
-  const payload = { telegram_id: userId, points: strokes };
-  debug("Payload à envoyer: " + JSON.stringify(payload));
-
-  try {
-    Telegram.WebApp.sendData(JSON.stringify(payload));
-    statusEl.textContent = "✅ Signature envoyée !";
-    debug("sendData() appelé avec succès");
-  } catch(e){
-    statusEl.textContent = "❌ Erreur lors de l'envoi";
-    debug("Erreur sendData(): " + e);
-  }
+    if(strokes.length===0){ alert("❌ Aucun tracé"); return; }
+    const payload = {telegram_id: tg.initDataUnsafe?.user?.id || null, points: strokes};
+    tg.sendData(JSON.stringify(payload));
+    document.getElementById('status').textContent = "✅ Signature envoyée !";
+    strokes=[];
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 });
 </script>
 </body>
